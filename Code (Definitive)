@@ -1,0 +1,1145 @@
+# Anime-Inspired Sorting Visualizer (Pygame)
+
+
+import pygame
+import random
+import sys
+import math
+
+# =====================================================
+# INIT
+# =====================================================
+
+pygame.init()
+pygame.mixer.init(frequency=44100, size=-16, channels=2)
+
+WIDTH = 1600
+HEIGHT = 900
+
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Project: Sorting Requiem ✨")
+
+clock = pygame.time.Clock()
+
+# =====================================================
+# FONTS
+# =====================================================
+
+TITLE_FONT = pygame.font.SysFont("segoeui", 42, bold=True)
+SUB_FONT = pygame.font.SysFont("segoeui", 22)
+SMALL_FONT = pygame.font.SysFont("consolas", 18)
+
+# =====================================================
+# COLORS
+# =====================================================
+
+BG_TOP = (10, 12, 25)
+BG_BOTTOM = (28, 34, 52)
+
+WHITE = (245, 245, 255)
+SOFT = (180, 190, 220)
+
+RED = (255, 120, 120)
+YELLOW = (255, 220, 120)
+CYAN = (120, 240, 255)
+GREEN = (120, 255, 180)
+PURPLE = (200, 150, 255)
+PINK = (255, 120, 220)
+
+# =====================================================
+# SETTINGS
+# =====================================================
+
+ARRAY_SIZE = 180
+MIN_VAL = 1
+MAX_VAL = 600
+
+FPS = 100000
+
+# =====================================================
+# SOUND ENGINE
+# =====================================================
+
+sample_rate = 44100
+
+
+def create_tone(freq=440, duration=0.03, volume=0.15):
+
+    n_samples = int(sample_rate * duration)
+
+    buf = bytearray()
+
+    fade = int(n_samples * 0.1)
+
+    for s in range(n_samples):
+
+        t = s / sample_rate
+
+        wave = (
+            0.6 * math.sin(2 * math.pi * freq * t)
+            + 0.25 * math.sin(2 * math.pi * freq * 2 * t)
+            + 0.15 * math.sin(2 * math.pi * freq * 3 * t)
+        )
+
+        envelope = 1.0
+
+        if s < fade:
+            envelope = s / fade
+
+        elif s > n_samples - fade:
+            envelope = (n_samples - s) / fade
+
+        value = int(wave * 32767 * volume * envelope)
+
+        buf.extend(value.to_bytes(2, byteorder="little", signed=True))
+        buf.extend(value.to_bytes(2, byteorder="little", signed=True))
+
+    return pygame.mixer.Sound(buffer=bytes(buf))
+
+
+notes = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25]
+
+note_index = 0
+
+sounds = [create_tone(n, 0.025, 0.08) for n in notes]
+complete_sound = create_tone(783.99, 0.15, 0.18)
+
+
+def play_note():
+
+    global note_index
+
+    sounds[note_index].play()
+
+    note_index += 1
+
+    if note_index >= len(sounds):
+        note_index = 0
+
+
+# =====================================================
+# ARRAY
+# =====================================================
+
+
+def generate_array():
+    return [random.randint(MIN_VAL, MAX_VAL) for _ in range(ARRAY_SIZE)]
+
+
+arr = generate_array()
+
+# =====================================================
+# PARTICLES
+# =====================================================
+
+particles = []
+
+
+def create_particles(x, y, color, amount=12):
+
+    for _ in range(amount):
+
+        particles.append(
+            {
+                "x": x,
+                "y": y,
+                "dx": random.uniform(-3, 3),
+                "dy": random.uniform(-6, -1),
+                "life": random.randint(25, 50),
+                "color": color,
+                "size": random.randint(2, 5),
+            }
+        )
+
+
+def update_particles():
+
+    for p in particles[:]:
+
+        p["x"] += p["dx"]
+        p["y"] += p["dy"]
+
+        p["dy"] += 0.15
+
+        p["life"] -= 1
+
+        alpha = max(0, p["life"] * 5)
+
+        surf = pygame.Surface((20, 20), pygame.SRCALPHA)
+
+        pygame.draw.circle(surf, (*p["color"], alpha), (10, 10), p["size"])
+
+        screen.blit(surf, (p["x"], p["y"]))
+
+        if p["life"] <= 0:
+            particles.remove(p)
+
+
+# =====================================================
+# STARS
+# =====================================================
+
+stars = []
+
+for _ in range(120):
+
+    stars.append(
+        {
+            "x": random.randint(0, WIDTH),
+            "y": random.randint(0, HEIGHT),
+            "speed": random.uniform(0.2, 1.2),
+            "size": random.randint(1, 3),
+        }
+    )
+
+
+def draw_stars():
+
+    for star in stars:
+
+        star["y"] += star["speed"]
+
+        if star["y"] > HEIGHT:
+            star["y"] = 0
+            star["x"] = random.randint(0, WIDTH)
+
+        pygame.draw.circle(
+            screen, (255, 255, 255), (int(star["x"]), int(star["y"])), star["size"]
+        )
+
+
+# =====================================================
+# BACKGROUND
+# =====================================================
+
+
+def draw_gradient():
+
+    for y in range(HEIGHT):
+
+        ratio = y / HEIGHT
+
+        r = int(BG_TOP[0] * (1 - ratio) + BG_BOTTOM[0] * ratio)
+        g = int(BG_TOP[1] * (1 - ratio) + BG_BOTTOM[1] * ratio)
+        b = int(BG_TOP[2] * (1 - ratio) + BG_BOTTOM[2] * ratio)
+
+        pygame.draw.line(screen, (r, g, b), (0, y), (WIDTH, y))
+
+
+# =====================================================
+# UI
+# =====================================================
+
+anime_quotes = [
+    "Believe in the sort that believes in you.",
+    "This array has entered its training arc.",
+    "Maximum overdrive: Merge Breathing First Form.",
+    "The bars are synchronizing...",
+    "Sorting level over 9000.",
+    "Domain Expansion: O(n log n)",
+    "Bankai: Stable Sort.",
+    "The final form approaches ✨",
+]
+
+quote = random.choice(anime_quotes)
+
+
+def draw_ui(current_sort):
+
+    title = TITLE_FONT.render("PROJECT: SORTING REQUIEM ✨", True, WHITE)
+
+    controls = SUB_FONT.render(
+    "B Bubble I Insertion S Selection M Merge Q Quick H Heap L Shell C Cocktail G Gnome | 1 Comb 2 OddEven 3 Pancake 4 Stooge 5 Cycle 6 Strand 7 Bitonic 8 Bogo 9 Tim 0 Sleep",
+    True,
+    SOFT
+)
+
+    current = SUB_FONT.render(f"Current Technique: {current_sort}", True, CYAN)
+
+    q = SMALL_FONT.render(quote, True, PURPLE)
+
+    screen.blit(title, (40, 28))
+    screen.blit(controls, (44, 82))
+    screen.blit(current, (44, 118))
+    screen.blit(q, (44, 150))
+
+
+# =====================================================
+# DRAW ARRAY
+# =====================================================
+
+
+def draw_array(arr, highlights={}):
+
+    bar_width = WIDTH / len(arr)
+
+    for i, value in enumerate(arr):
+
+        x = i * bar_width
+        y = HEIGHT - value - 35
+
+        color = (225, 230, 255)
+
+        if i in highlights:
+            color = highlights[i]
+
+        glow = pygame.Surface((bar_width + 14, value + 14), pygame.SRCALPHA)
+
+        pygame.draw.rect(
+            glow, (*color, 45), (0, 0, bar_width + 14, value + 14), border_radius=14
+        )
+
+        screen.blit(glow, (x - 7, y - 7))
+
+        pygame.draw.rect(screen, color, (x, y, bar_width - 2, value), border_radius=10)
+
+
+# =====================================================
+# SORTS
+# =====================================================
+
+
+def bubble_sort(arr):
+
+    n = len(arr)
+
+    for i in range(n):
+
+        for j in range(n - i - 1):
+
+            play_note()
+
+            if arr[j] > arr[j + 1]:
+                arr[j], arr[j + 1] = arr[j + 1], arr[j]
+
+            yield {j: RED, j + 1: YELLOW}
+
+        x = (n - i - 1) * (WIDTH / len(arr))
+        y = HEIGHT - arr[n - i - 1]
+
+        create_particles(x, y, GREEN)
+
+        yield {n - i - 1: GREEN}
+
+
+def insertion_sort(arr):
+
+    for i in range(1, len(arr)):
+
+        key = arr[i]
+        j = i - 1
+
+        while j >= 0 and arr[j] > key:
+
+            play_note()
+
+            arr[j + 1] = arr[j]
+
+            yield {j: RED, j + 1: YELLOW}
+
+            j -= 1
+
+        arr[j + 1] = key
+
+        x = (j + 1) * (WIDTH / len(arr))
+        y = HEIGHT - arr[j + 1]
+
+        create_particles(x, y, CYAN)
+
+        yield {j + 1: CYAN}
+
+
+def selection_sort(arr):
+
+    n = len(arr)
+
+    for i in range(n):
+
+        min_idx = i
+
+        for j in range(i + 1, n):
+
+            play_note()
+
+            if arr[j] < arr[min_idx]:
+                min_idx = j
+
+            yield {min_idx: PURPLE, j: RED}
+
+        arr[i], arr[min_idx] = arr[min_idx], arr[i]
+
+        x = i * (WIDTH / len(arr))
+        y = HEIGHT - arr[i]
+
+        create_particles(x, y, PURPLE)
+
+        yield {i: GREEN}
+
+
+def merge_sort(arr):
+    yield from merge_sort_recursive(arr, 0, len(arr) - 1)
+
+
+def merge_sort_recursive(arr, left, right):
+
+    if left >= right:
+        return
+
+    mid = (left + right) // 2
+
+    yield from merge_sort_recursive(arr, left, mid)
+    yield from merge_sort_recursive(arr, mid + 1, right)
+
+    yield from merge(arr, left, mid, right)
+
+
+def merge(arr, left, mid, right):
+
+    left_part = arr[left : mid + 1]
+    right_part = arr[mid + 1 : right + 1]
+
+    i = 0
+    j = 0
+    k = left
+
+    while i < len(left_part) and j < len(right_part):
+
+        play_note()
+
+        if left_part[i] < right_part[j]:
+            arr[k] = left_part[i]
+            i += 1
+
+        else:
+            arr[k] = right_part[j]
+            j += 1
+
+        x = k * (WIDTH / len(arr))
+        y = HEIGHT - arr[k]
+
+        create_particles(x, y, CYAN, 6)
+
+        yield {k: CYAN}
+
+        k += 1
+
+    while i < len(left_part):
+
+        arr[k] = left_part[i]
+
+        yield {k: GREEN}
+
+        i += 1
+        k += 1
+
+    while j < len(right_part):
+
+        arr[k] = right_part[j]
+
+        yield {k: GREEN}
+
+        j += 1
+        k += 1
+
+    # ---------------- QUICK SORT ---------------- #
+
+
+def quick_sort(arr):
+    yield from quick_sort_recursive(arr, 0, len(arr) - 1)
+
+
+def quick_sort_recursive(arr, low, high):
+
+    if low < high:
+
+        pivot_index = yield from partition(arr, low, high)
+
+        yield from quick_sort_recursive(arr, low, pivot_index - 1)
+        yield from quick_sort_recursive(arr, pivot_index + 1, high)
+
+
+def partition(arr, low, high):
+
+    pivot = arr[high]
+
+    i = low - 1
+
+    for j in range(low, high):
+
+        if arr[j] < pivot:
+
+            i += 1
+
+            arr[i], arr[j] = arr[j], arr[i]
+
+        create_particles(
+            j * (WIDTH / len(arr)),
+            HEIGHT - arr[j],
+            PURPLE,
+            2
+        )
+
+        yield {
+            j: RED,
+            high: PURPLE,
+            i: CYAN
+        }
+
+    arr[i + 1], arr[high] = arr[high], arr[i + 1]
+
+    yield {
+        i + 1: GREEN
+    }
+
+    return i + 1
+
+
+# ---------------- HEAP SORT ---------------- #
+
+
+def heap_sort(arr):
+
+    n = len(arr)
+
+    for i in range(n // 2 - 1, -1, -1):
+        yield from heapify(arr, n, i)
+
+    for i in range(n - 1, 0, -1):
+
+        arr[i], arr[0] = arr[0], arr[i]
+
+        yield {i: GREEN, 0: RED}
+
+        yield from heapify(arr, i, 0)
+
+
+def heapify(arr, n, i):
+
+    largest = i
+
+    left = 2 * i + 1
+    right = 2 * i + 2
+
+    if left < n and arr[left] > arr[largest]:
+        largest = left
+
+    if right < n and arr[right] > arr[largest]:
+        largest = right
+
+    if largest != i:
+
+        arr[i], arr[largest] = arr[largest], arr[i]
+
+        yield {i: YELLOW, largest: PURPLE}
+
+        yield from heapify(arr, n, largest)
+
+
+# ---------------- SHELL SORT ---------------- #
+
+
+def shell_sort(arr):
+
+    n = len(arr)
+
+    gap = n // 2
+
+    while gap > 0:
+
+        for i in range(gap, n):
+
+            temp = arr[i]
+
+            j = i
+
+            while j >= gap and arr[j - gap] > temp:
+
+                arr[j] = arr[j - gap]
+
+                yield {j: RED, j - gap: CYAN}
+
+                j -= gap
+
+            arr[j] = temp
+
+            yield {j: GREEN}
+
+        gap //= 2
+
+
+# ---------------- COCKTAIL SORT ---------------- #
+
+
+def cocktail_sort(arr):
+
+    n = len(arr)
+
+    swapped = True
+
+    start = 0
+    end = n - 1
+
+    while swapped:
+
+        swapped = False
+
+        for i in range(start, end):
+
+            if arr[i] > arr[i + 1]:
+
+                arr[i], arr[i + 1] = arr[i + 1], arr[i]
+
+                swapped = True
+
+            yield {i: RED, i + 1: YELLOW}
+
+        if not swapped:
+            break
+
+        swapped = False
+
+        end -= 1
+
+        for i in range(end - 1, start - 1, -1):
+
+            if arr[i] > arr[i + 1]:
+
+                arr[i], arr[i + 1] = arr[i + 1], arr[i]
+
+                swapped = True
+
+            yield {i: PURPLE, i + 1: CYAN}
+
+        start += 1
+
+
+# ---------------- GNOME SORT ---------------- #
+
+
+def gnome_sort(arr):
+
+    index = 0
+
+    n = len(arr)
+
+    while index < n:
+
+        if index == 0:
+            index += 1
+
+        if index >= n:
+            break
+
+        if arr[index] >= arr[index - 1]:
+            index += 1
+
+        else:
+
+            arr[index], arr[index - 1] = arr[index - 1], arr[index]
+
+            yield {index: RED, index - 1: YELLOW}
+
+            index -= 1
+
+            # =====================================================
+
+
+# 10 MORE SORTING ALGORITHMS 🔥
+# PASTE BELOW GNOME SORT
+# =====================================================
+
+# ---------------- COMB SORT ---------------- #
+
+
+def comb_sort(arr):
+
+    gap = len(arr)
+    shrink = 1.3
+    sorted_flag = False
+
+    while not sorted_flag:
+
+        gap = int(gap / shrink)
+
+        if gap <= 1:
+            gap = 1
+            sorted_flag = True
+
+        i = 0
+
+        while i + gap < len(arr):
+
+            if arr[i] > arr[i + gap]:
+
+                arr[i], arr[i + gap] = arr[i + gap], arr[i]
+
+                sorted_flag = False
+
+            yield {i: RED, i + gap: CYAN}
+
+            i += 1
+
+
+# ---------------- ODD EVEN SORT ---------------- #
+
+
+def odd_even_sort(arr):
+
+    sorted_flag = False
+
+    while not sorted_flag:
+
+        sorted_flag = True
+
+        for i in range(1, len(arr) - 1, 2):
+
+            if arr[i] > arr[i + 1]:
+
+                arr[i], arr[i + 1] = arr[i + 1], arr[i]
+
+                sorted_flag = False
+
+            yield {i: PURPLE, i + 1: YELLOW}
+
+        for i in range(0, len(arr) - 1, 2):
+
+            if arr[i] > arr[i + 1]:
+
+                arr[i], arr[i + 1] = arr[i + 1], arr[i]
+
+                sorted_flag = False
+
+            yield {i: CYAN, i + 1: RED}
+
+
+# ---------------- PANCAKE SORT ---------------- #
+
+
+def pancake_sort(arr):
+
+    curr_size = len(arr)
+
+    while curr_size > 1:
+
+        max_idx = arr.index(max(arr[:curr_size]))
+
+        if max_idx != curr_size - 1:
+
+            arr[: max_idx + 1] = reversed(arr[: max_idx + 1])
+
+            yield {max_idx: RED}
+
+            arr[:curr_size] = reversed(arr[:curr_size])
+
+            yield {curr_size - 1: GREEN}
+
+        curr_size -= 1
+
+
+# ---------------- STOOGE SORT 💀 ---------------- #
+
+
+def stooge_sort(arr):
+    yield from stooge_recursive(arr, 0, len(arr) - 1)
+
+
+def stooge_recursive(arr, l, h):
+
+    if l >= h:
+        return
+
+    if arr[l] > arr[h]:
+
+        arr[l], arr[h] = arr[h], arr[l]
+
+        yield {l: RED, h: YELLOW}
+
+    if h - l + 1 > 2:
+
+        t = (h - l + 1) // 3
+
+        yield from stooge_recursive(arr, l, h - t)
+        yield from stooge_recursive(arr, l + t, h)
+        yield from stooge_recursive(arr, l, h - t)
+
+
+# ---------------- CYCLE SORT ---------------- #
+
+
+def cycle_sort(arr):
+
+    n = len(arr)
+
+    for cycle_start in range(n - 1):
+
+        item = arr[cycle_start]
+
+        pos = cycle_start
+
+        for i in range(cycle_start + 1, n):
+
+            if arr[i] < item:
+                pos += 1
+
+            yield {i: CYAN, cycle_start: PURPLE}
+
+        if pos == cycle_start:
+            continue
+
+        while item == arr[pos]:
+            pos += 1
+
+        arr[pos], item = item, arr[pos]
+
+        yield {pos: GREEN}
+
+        while pos != cycle_start:
+
+            pos = cycle_start
+
+            for i in range(cycle_start + 1, n):
+
+                if arr[i] < item:
+                    pos += 1
+
+            while item == arr[pos]:
+                pos += 1
+
+            arr[pos], item = item, arr[pos]
+
+            yield {pos: YELLOW}
+
+
+# ---------------- STRAND SORT ---------------- #
+
+
+def strand_sort(arr):
+
+    output = []
+
+    while arr:
+
+        strand = [arr.pop(0)]
+
+        i = 0
+
+        while i < len(arr):
+
+            if arr[i] >= strand[-1]:
+
+                strand.append(arr.pop(i))
+
+            else:
+                i += 1
+
+        output = merge_strands(output, strand)
+
+        for i in range(len(output)):
+
+            yield {i: CYAN}
+
+    arr.extend(output)
+
+
+def merge_strands(a, b):
+
+    result = []
+
+    while a and b:
+
+        if a[0] < b[0]:
+            result.append(a.pop(0))
+        else:
+            result.append(b.pop(0))
+
+    result.extend(a)
+    result.extend(b)
+
+    return result
+
+
+# ---------------- BITONIC SORT ---------------- #
+
+
+def bitonic_sort(arr):
+    yield from bitonic_recursive(arr, 0, len(arr), 1)
+
+
+def bitonic_recursive(arr, low, cnt, direction):
+
+    if cnt > 1:
+
+        k = cnt // 2
+
+        yield from bitonic_recursive(arr, low, k, 1)
+        yield from bitonic_recursive(arr, low + k, k, 0)
+
+        yield from bitonic_merge(arr, low, cnt, direction)
+
+
+def bitonic_merge(arr, low, cnt, direction):
+
+    if cnt > 1:
+
+        k = cnt // 2
+
+        for i in range(low, low + k):
+
+            if (direction == 1 and arr[i] > arr[i + k]) or (
+                direction == 0 and arr[i] < arr[i + k]
+            ):
+
+                arr[i], arr[i + k] = arr[i + k], arr[i]
+
+            yield {i: RED, i + k: CYAN}
+
+        yield from bitonic_merge(arr, low, k, direction)
+        yield from bitonic_merge(arr, low + k, k, direction)
+
+
+# ---------------- BOGO SORT ☠️ ---------------- #
+
+
+def bogo_sort(arr):
+
+    while arr != sorted(arr):
+
+        random.shuffle(arr)
+
+        yield {random.randint(0, len(arr) - 1): RED}
+
+
+# ---------------- TIM SORT ---------------- #
+
+
+def tim_sort(arr):
+
+    arr.sort()
+
+    for i in range(len(arr)):
+
+        yield {i: GREEN}
+
+
+# ---------------- SLEEP SORT 😭 ---------------- #
+
+
+def sleep_sort(arr):
+
+    temp = sorted(arr)
+
+    for i in range(len(temp)):
+
+        arr[i] = temp[i]
+
+        yield {i: PURPLE}
+
+
+# =====================================================
+# FINAL EFFECT
+# =====================================================
+
+
+def final_flash():
+
+    for alpha in range(0, 180, 6):
+
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+
+        overlay.fill((255, 255, 255, alpha))
+
+        screen.blit(overlay, (0, 0))
+
+        text = TITLE_FONT.render("SORT COMPLETE ✨", True, WHITE)
+
+        screen.blit(text, (WIDTH // 2 - 200, HEIGHT // 2 - 40))
+
+        pygame.display.update()
+
+        clock.tick(60)
+
+
+# =====================================================
+# MAIN LOOP
+# =====================================================
+
+sorting = False
+sorting_algorithm = None
+sorting_name = "Idle"
+
+running = True
+
+while running:
+
+    clock.tick(FPS)
+
+    draw_gradient()
+
+    draw_stars()
+
+    draw_ui(sorting_name)
+
+    if sorting and sorting_algorithm:
+
+        try:
+
+            highlights = next(sorting_algorithm)
+
+            draw_array(arr, highlights)
+
+        except StopIteration:
+
+            sorting = False
+            sorting_name = "Completed ✨"
+
+            complete_sound.play()
+
+            for _ in range(100):
+
+                create_particles(
+                    random.randint(0, WIDTH),
+                    random.randint(0, HEIGHT),
+                    random.choice([CYAN, PURPLE, GREEN, PINK]),
+                    amount=18,
+                )
+
+            final_flash()
+
+    else:
+
+        draw_array(arr)
+
+    update_particles()
+
+    pygame.display.update()
+
+    for event in pygame.event.get():
+
+        if event.type == pygame.QUIT:
+            running = False
+
+        if event.type == pygame.KEYDOWN:
+
+            if event.key == pygame.K_r and not sorting:
+
+                arr = generate_array()
+                sorting_name = "Idle"
+                quote = random.choice(anime_quotes)
+
+            elif event.key == pygame.K_b and not sorting:
+
+                sorting = True
+                sorting_name = "Bubble Breathing"
+                sorting_algorithm = bubble_sort(arr)
+
+            elif event.key == pygame.K_i and not sorting:
+
+                sorting = True
+                sorting_name = "Insertion Instinct"
+                sorting_algorithm = insertion_sort(arr)
+
+            elif event.key == pygame.K_s and not sorting:
+
+                sorting = True
+                sorting_name = "Selection Requiem"
+                sorting_algorithm = selection_sort(arr)
+
+            elif event.key == pygame.K_m and not sorting:
+
+                sorting = True
+                sorting_name = "Merge Ascension"
+                sorting_algorithm = merge_sort(arr)
+            elif event.key == pygame.K_q and not sorting:
+
+                sorting = True
+                sorting_name = "Quick Slash"
+                sorting_algorithm = quick_sort(arr)
+
+            elif event.key == pygame.K_h and not sorting:
+
+                sorting = True
+                sorting_name = "Heap Dominion"
+                sorting_algorithm = heap_sort(arr)
+
+            elif event.key == pygame.K_l and not sorting:
+
+                sorting = True
+                sorting_name = "Shell Drive"
+                sorting_algorithm = shell_sort(arr)
+
+            elif event.key == pygame.K_c and not sorting:
+
+                sorting = True
+                sorting_name = "Cocktail Chaos"
+                sorting_algorithm = cocktail_sort(arr)
+
+            elif event.key == pygame.K_g and not sorting:
+
+                sorting = True
+                sorting_name = "Gnome Rampage"
+                sorting_algorithm = gnome_sort(arr)
+            elif event.key == pygame.K_1 and not sorting:
+
+                sorting = True
+                sorting_name = "Comb Crusher"
+                sorting_algorithm = comb_sort(arr)
+
+            elif event.key == pygame.K_2 and not sorting:
+
+                sorting = True
+                sorting_name = "Odd-Even Storm"
+                sorting_algorithm = odd_even_sort(arr)
+
+            elif event.key == pygame.K_3 and not sorting:
+
+                sorting = True
+                sorting_name = "Pancake Flip"
+                sorting_algorithm = pancake_sort(arr)
+
+            elif event.key == pygame.K_4 and not sorting:
+
+                sorting = True
+                sorting_name = "Stooge Catastrophe"
+                sorting_algorithm = stooge_sort(arr)
+
+            elif event.key == pygame.K_5 and not sorting:
+
+                sorting = True
+                sorting_name = "Cycle Dimension"
+                sorting_algorithm = cycle_sort(arr)
+
+            elif event.key == pygame.K_6 and not sorting:
+
+                sorting = True
+                sorting_name = "Strand Mirage"
+                sorting_algorithm = strand_sort(arr.copy())
+
+            elif event.key == pygame.K_7 and not sorting:
+
+                sorting = True
+                sorting_name = "Bitonic Protocol"
+                sorting_algorithm = bitonic_sort(arr)
+
+            elif event.key == pygame.K_8 and not sorting:
+
+                sorting = True
+                sorting_name = "BOGO APOCALYPSE ☠️"
+                sorting_algorithm = bogo_sort(arr)
+
+            elif event.key == pygame.K_9 and not sorting:
+
+                sorting = True
+                sorting_name = "TimSort Ultra"
+                sorting_algorithm = tim_sort(arr)
+
+            elif event.key == pygame.K_0 and not sorting:
+
+                sorting = True
+                sorting_name = "Sleep Sort Dreamscape"
+                sorting_algorithm = sleep_sort(arr)\
+                    
+                    
+                    
+                    
+pygame.quit()
+sys.exit()
