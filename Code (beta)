@@ -1,0 +1,267 @@
+import pygame
+import random
+import sys
+
+# ---------------- INITIAL SETUP ---------------- #
+
+pygame.init()
+
+WIDTH = 1000
+HEIGHT = 600
+
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Sorting Algorithm Visualizer")
+
+clock = pygame.time.Clock()
+
+FONT = pygame.font.SysFont("arial", 20)
+
+# ---------------- COLORS ---------------- #
+
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+GREEN = (0, 255, 0)
+RED = (255, 0, 0)
+YELLOW = (255, 255, 0)
+BLUE = (0, 100, 255)
+
+# ---------------- ARRAY SETTINGS ---------------- #
+
+ARRAY_SIZE = 100
+MIN_VAL = 10
+MAX_VAL = 550
+
+# ---------------- GENERATE ARRAY ---------------- #
+
+def generate_array():
+    return [random.randint(MIN_VAL, MAX_VAL) for _ in range(ARRAY_SIZE)]
+
+arr = generate_array()
+
+# ---------------- DRAW FUNCTIONS ---------------- #
+
+def draw_text(text):
+
+    render = FONT.render(text, True, GREEN)
+    screen.blit(render, (20, 20))
+
+
+def draw_array(arr, color_positions={}):
+
+    bar_width = max(1, WIDTH // len(arr))
+
+    for i, value in enumerate(arr):
+
+        x = i * bar_width
+        y = HEIGHT - value
+
+        color = WHITE
+
+        if i in color_positions:
+            color = color_positions[i]
+
+        pygame.draw.rect(
+            screen,
+            color,
+            (x, y, bar_width - 1, value)
+        )
+
+# ---------------- BUBBLE SORT ---------------- #
+
+def bubble_sort(arr):
+
+    n = len(arr)
+
+    for i in range(n):
+
+        for j in range(n - i - 1):
+
+            if arr[j] > arr[j + 1]:
+                arr[j], arr[j + 1] = arr[j + 1], arr[j]
+
+            yield {
+                j: RED,
+                j + 1: YELLOW
+            }
+
+# ---------------- INSERTION SORT ---------------- #
+
+def insertion_sort(arr):
+
+    for i in range(1, len(arr)):
+
+        key = arr[i]
+        j = i - 1
+
+        while j >= 0 and arr[j] > key:
+
+            arr[j + 1] = arr[j]
+
+            yield {
+                j: RED,
+                j + 1: YELLOW
+            }
+
+            j -= 1
+
+        arr[j + 1] = key
+
+        yield {
+            j + 1: BLUE
+        }
+
+# ---------------- SELECTION SORT ---------------- #
+
+def selection_sort(arr):
+
+    n = len(arr)
+
+    for i in range(n):
+
+        min_idx = i
+
+        for j in range(i + 1, n):
+
+            if arr[j] < arr[min_idx]:
+                min_idx = j
+
+            yield {
+                min_idx: BLUE,
+                j: RED
+            }
+
+        arr[i], arr[min_idx] = arr[min_idx], arr[i]
+
+        yield {
+            i: GREEN
+        }
+
+# ---------------- MERGE SORT ---------------- #
+
+def merge_sort(arr):
+
+    yield from merge_sort_recursive(arr, 0, len(arr) - 1)
+
+def merge_sort_recursive(arr, left, right):
+
+    if left >= right:
+        return
+
+    mid = (left + right) // 2
+
+    yield from merge_sort_recursive(arr, left, mid)
+    yield from merge_sort_recursive(arr, mid + 1, right)
+
+    yield from merge(arr, left, mid, right)
+
+def merge(arr, left, mid, right):
+
+    left_part = arr[left:mid + 1]
+    right_part = arr[mid + 1:right + 1]
+
+    i = 0
+    j = 0
+    k = left
+
+    while i < len(left_part) and j < len(right_part):
+
+        if left_part[i] < right_part[j]:
+            arr[k] = left_part[i]
+            i += 1
+        else:
+            arr[k] = right_part[j]
+            j += 1
+
+        yield {
+            k: RED
+        }
+
+        k += 1
+
+    while i < len(left_part):
+
+        arr[k] = left_part[i]
+
+        yield {
+            k: YELLOW
+        }
+
+        i += 1
+        k += 1
+
+    while j < len(right_part):
+
+        arr[k] = right_part[j]
+
+        yield {
+            k: YELLOW
+        }
+
+        j += 1
+        k += 1
+
+# ---------------- MAIN LOOP ---------------- #
+
+running = True
+
+sorting = False
+sorting_algorithm = None
+sorting_name = ""
+
+while running:
+
+    clock.tick(120)
+
+    screen.fill(BLACK)
+
+    draw_text(
+        f"R = Randomize | B = Bubble | I = Insertion | S = Selection | M = Merge | Current: {sorting_name}"
+    )
+
+    if sorting and sorting_algorithm is not None:
+
+        try:
+            color_positions = next(sorting_algorithm)
+            draw_array(arr, color_positions)
+
+        except StopIteration:
+            sorting = False
+            sorting_name = ""
+
+    else:
+        draw_array(arr)
+
+    pygame.display.update()
+
+    for event in pygame.event.get():
+
+        if event.type == pygame.QUIT:
+            running = False
+
+        if event.type == pygame.KEYDOWN:
+
+            if event.key == pygame.K_r and not sorting:
+                arr = generate_array()
+
+            elif event.key == pygame.K_b and not sorting:
+                sorting = True
+                sorting_algorithm = bubble_sort(arr)
+                sorting_name = "Bubble Sort"
+
+            elif event.key == pygame.K_i and not sorting:
+                sorting = True
+                sorting_algorithm = insertion_sort(arr)
+                sorting_name = "Insertion Sort"
+
+            elif event.key == pygame.K_s and not sorting:
+                sorting = True
+                sorting_algorithm = selection_sort(arr)
+                sorting_name = "Selection Sort"
+
+            elif event.key == pygame.K_m and not sorting:
+                sorting = True
+                sorting_algorithm = merge_sort(arr)
+                sorting_name = "Merge Sort"
+
+pygame.quit()
+sys.exit()
